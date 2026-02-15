@@ -6,41 +6,65 @@ CLAP_THRESHOLD = 170
 CLAP_DEBOUNCE_MS = 450
 
 
-def draw_polygon(sides: int, side_units: int, speed: int, turn_speed: int) -> None:
+def draw_polygon(sides: int, side_distance: int, speed: int, turn_speed: int) -> None:
     exterior_angle = int(360 / sides)
     for _ in range(sides):
-        mai_z.move(mai_z.MoveDirection.FORWARDS, speed, side_units)
+        mai_z.move(mai_z.MoveDirection.FORWARDS, speed, side_distance)
         mb.sleep(80)
         mai_z.rotate_angle(exterior_angle, turn_speed)
         mb.sleep(80)
 
 
 def draw_square() -> None:
-    draw_polygon(sides=4, side_units=20, speed=48, turn_speed=38)
+    draw_polygon(
+        sides=4,
+        side_distance=mai_z.MoveDistance.TWENTY_UNITS,
+        speed=48,
+        turn_speed=38,
+    )
 
 
 def draw_triangle() -> None:
-    draw_polygon(sides=3, side_units=24, speed=48, turn_speed=38)
+    draw_polygon(
+        sides=3,
+        side_distance=mai_z.MoveDistance.TWENTY_FIVE_UNITS,
+        speed=48,
+        turn_speed=38,
+    )
 
 
 def draw_hexagon() -> None:
-    draw_polygon(sides=6, side_units=12, speed=44, turn_speed=34)
+    draw_polygon(
+        sides=6,
+        side_distance=mai_z.MoveDistance.TEN_UNITS,
+        speed=44,
+        turn_speed=34,
+    )
 
 
 def draw_circle() -> None:
     for _ in range(24):
-        mai_z.move(mai_z.MoveDirection.FORWARDS, 42, 5)
+        mai_z.move(
+            mai_z.MoveDirection.FORWARDS,
+            42,
+            mai_z.MoveDistance.FIVE_UNITS,
+        )
         mai_z.rotate_angle(15, 34)
         mb.sleep(40)
 
 
 def draw_spiral() -> None:
-    distance = 5
-    for _ in range(9):
+    distances = [
+        mai_z.MoveDistance.FIVE_UNITS,
+        mai_z.MoveDistance.TEN_UNITS,
+        mai_z.MoveDistance.FIFTEEN_UNITS,
+        mai_z.MoveDistance.TWENTY_UNITS,
+        mai_z.MoveDistance.TWENTY_FIVE_UNITS,
+    ]
+    for distance in distances:
         mai_z.move(mai_z.MoveDirection.FORWARDS, 45, distance)
         mai_z.rotate_angle(40, 35)
         mb.sleep(60)
-        distance += 4
 
 
 PATTERNS = [
