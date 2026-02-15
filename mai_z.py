@@ -1,7 +1,9 @@
 """MicroPython Mai-Z extension for micro:bit.
 
 This module ports the Kitronik MakeCode Mai-Z extension protocol to Python.
-Usage:
+It provides movement, lighting, buzzer, and sensor APIs over Mai-Z I2C.
+
+Typical usage:
 
     import mai_z
 
@@ -179,17 +181,17 @@ COLOUR_ID = {
 # Mutable module state
 # -----------------------------------------------------------------------------
 
-_distance_value = 0
-_line_follow_value = 0x00
-_front_distance_value = 0
-_auto_cliff_enabled = False
-_false_cliff_counter = 0
-_current_cliff_status = False
-_error_status = 0x00
-_command_completed_status = 0x00
-_inches_flag = False
-_successful_comms_reset = False
-_software_version = 0
+_distance_value: int = 0
+_line_follow_value: int = 0x00
+_front_distance_value: float = 0
+_auto_cliff_enabled: bool = False
+_false_cliff_counter: int = 0
+_current_cliff_status: bool = False
+_error_status: int = 0x00
+_command_completed_status: int = 0x00
+_inches_flag: bool = False
+_successful_comms_reset: bool = False
+_software_version: int = 0
 
 
 # -----------------------------------------------------------------------------
@@ -197,7 +199,8 @@ _software_version = 0
 # -----------------------------------------------------------------------------
 
 
-def _clamp(value, low, high):
+def _clamp(value: int, low: int, high: int) -> int:
+    """Clamp value to the inclusive range [low, high]."""
     if value < low:
         return low
     if value > high:
@@ -205,26 +208,30 @@ def _clamp(value, low, high):
     return value
 
 
-def _colour_id_mapper(colour):
+def _colour_id_mapper(colour: int) -> int:
+    """Map MakeCode RGB decimal color to Mai-Z LED color id."""
     return COLOUR_ID.get(colour, 0x00)
 
 
-def _int_to_bytes(value):
-    arr = []
+def _int_to_bytes(value: int) -> list:
+    """Convert a positive integer to little-endian byte list."""
+    arr: list = []
     while value > 0:
         arr.append(value & 0xFF)
         value >>= 8
     return arr
 
 
-def _calculate_check_byte(message):
+def _calculate_check_byte(message: list) -> int:
+    """Calculate protocol check byte for a message payload."""
     check_byte = 0
     for b in message:
         check_byte += b
     return (~check_byte) & 0xFF
 
 
-def _tx_message(command_id, params):
+def _tx_message(command_id: int, params: list) -> None:
+    """Send one protocol message to Mai-Z over I2C."""
     message_len = len(params) + 2
     message = [message_len, command_id]
     for p in params:
@@ -233,7 +240,8 @@ def _tx_message(command_id, params):
     mb.i2c.write(I2C_ADDRESS, bytes(message))
 
 
-def _rx_message(read_id):
+def _rx_message(read_id: int) -> None:
+    """Issue a read command and store decoded response in module state."""
     global _line_follow_value
     global _front_distance_value
     global _error_status
@@ -290,7 +298,8 @@ def _rx_message(read_id):
         _software_version = rx_data[2]
 
 
-def _comms_retries(command_id, command_params, comms_type):
+def _comms_retries(command_id: int, command_params: list, comms_type: int) -> None:
+    """Execute TX/RX command with retry and built-in error polling."""
     global _error_status
 
     retries = 0
@@ -326,12 +335,26 @@ def _comms_retries(command_id, command_params, comms_type):
 # -----------------------------------------------------------------------------
 
 
-def init():
-    """Initialise communication with Mai-Z (sends START_KEY)."""
+def init() -> None:
+    """Initialise Mai-Z communication by sending START_KEY.
+
+    Call this once before using movement, LEDs, or sensor reads.
+    """
     _tx_message(CommandID.START_KEY, [])
 
 
-def move(move_direction, speed, distance):
+def move(move_direction: int, speed: int, distance: int) -> None:
+    """Move forwards/backwards at speed (%) for selected distance units.
+
+    Args:
+        move_direction: One of:
+            - MoveDirection.FORWARDS
+            - MoveDirection.BACKWARDS
+        speed: Integer speed percentage, clamped to 1..100.
+        distance: One of MoveDistance constants, e.g.:
+            - MoveDistance.CONTINUOUS
+            - MoveDistance.ONE_UNIT / FIVE_UNITS / TEN_UNITS / ...
+    """
     global _distance_value
 
     capped_speed = int(_clamp(round(speed), 1, 100))
@@ -363,7 +386,15 @@ def move(move_direction, speed, distance):
     mb.sleep(100)
 
 
-def rotate_continuous(rotate_direction, speed):
+def rotate_continuous(rotate_direction: int, speed: int) -> None:
+    """Rotate continuously clockwise or anticlockwise at speed (%).
+
+    Args:
+        rotate_direction: One of:
+            - RotateDirection.CLOCKWISE
+            - RotateDirection.ANTICLOCKWISE
+        speed: Integer speed percentage, clamped to 1..100.
+    """
     capped_speed = int(_clamp(round(speed), 1, 100))
     _comms_retries(
         CommandID.SPIN,
@@ -373,7 +404,16 @@ def rotate_continuous(rotate_direction, speed):
     mb.sleep(100)
 
 
-def rotate_angle(rotate_ratio, speed):
+def rotate_angle(rotate_ratio: int, speed: int) -> None:
+    """Rotate by angle in degrees at speed (%).
+
+    Args:
+        rotate_ratio: Signed angle in degrees.
+            - Positive rotates clockwise
+            - Negative rotates anticlockwise
+            - 0 is treated as anticlockwise with zero distance
+        speed: Integer speed percentage, clamped to 1..100.
+    """
     capped_speed = int(_clamp(round(speed), 1, 100))
     rotate_direction = (
         RotateDirection.CLOCKWISE if rotate_ratio > 0 else RotateDirection.ANTICLOCKWISE
@@ -395,7 +435,15 @@ def rotate_angle(rotate_ratio, speed):
     mb.sleep(100)
 
 
-def rotate_360(rotate_direction, speed):
+def rotate_360(rotate_direction: int, speed: int) -> None:
+    """Rotate one full turn (360°) in selected direction at speed (%).
+
+    Args:
+        rotate_direction: One of:
+            - RotateDirection.CLOCKWISE
+            - RotateDirection.ANTICLOCKWISE
+        speed: Integer speed percentage, clamped to 1..100.
+    """
     capped_speed = int(_clamp(round(speed), 1, 100))
     _comms_retries(
         CommandID.SPIN, [rotate_direction, capped_speed, 0xA0, 0x8C], CommandType.TX
@@ -410,12 +458,14 @@ def rotate_360(rotate_direction, speed):
     mb.sleep(100)
 
 
-def stop():
+def stop() -> None:
+    """Stop Mai-Z motors immediately."""
     _comms_retries(CommandID.STOP, [], CommandType.TX)
     mb.sleep(100)
 
 
-def gradual_stop():
+def gradual_stop() -> None:
+    """Gradually decelerate Mai-Z to a stop."""
     _comms_retries(CommandID.GRADUAL_STOP, [], CommandType.TX)
     _comms_retries(CommandID.COMMAND_FINISHED_READ, [], CommandType.RX)
     mb.sleep(10)
@@ -427,7 +477,14 @@ def gradual_stop():
     mb.sleep(100)
 
 
-def move_tiles(move_x_tiles, speed):
+def move_tiles(move_x_tiles: int, speed: int) -> None:
+    """Move forwards by selected number of tiles at speed (%).
+
+    Args:
+        move_x_tiles: One of MoveXTiles constants:
+            - MoveXTiles.ONE .. MoveXTiles.TWELVE
+        speed: Integer speed percentage, clamped to 1..100.
+    """
     capped_speed = int(_clamp(round(speed), 1, 100))
     distance_value = int(move_x_tiles * 13.5 * DISTANCE_CONSTANT)
     distance_arr = _int_to_bytes(distance_value)
@@ -447,7 +504,14 @@ def move_tiles(move_x_tiles, speed):
     mb.sleep(100)
 
 
-def turn_tiles(tile_turn_direction):
+def turn_tiles(tile_turn_direction: int) -> None:
+    """Turn 90° left or right for tile movement routines.
+
+    Args:
+        tile_turn_direction: One of:
+            - TurnTiles.RIGHT
+            - TurnTiles.LEFT
+    """
     _comms_retries(
         CommandID.SPIN, [tile_turn_direction, 50, 0x28, 0x23], CommandType.TX
     )
@@ -461,7 +525,8 @@ def turn_tiles(tile_turn_direction):
     mb.sleep(100)
 
 
-def u_turn():
+def u_turn() -> None:
+    """Turn 180° for tile movement routines."""
     _comms_retries(
         CommandID.SPIN, [RotateDirection.CLOCKWISE, 50, 0x50, 0x46], CommandType.TX
     )
@@ -475,42 +540,96 @@ def u_turn():
     mb.sleep(100)
 
 
-def set_leds(colour):
+def set_leds(colour: int) -> None:
+    """Set all Mai-Z LEDs to one color picker value.
+
+    Args:
+        colour: MakeCode color picker decimal (RGB packed integer).
+            Example values: 16711680 (red), 65280 (green), 255 (blue), 0 (off).
+    """
     _comms_retries(
         CommandID.TURN_ALL_ZIP_LEDS, [_colour_id_mapper(colour)], CommandType.TX
     )
 
 
-def set_led(led_id, colour):
+def set_led(led_id: int, colour: int) -> None:
+    """Set one Mai-Z LED to one color picker value.
+
+    Args:
+        led_id: One of:
+            - LedID.LED_ONE
+            - LedID.LED_TWO
+            - LedID.LED_THREE
+            - LedID.LED_FOUR
+        colour: MakeCode color picker decimal (RGB packed integer).
+    """
     _comms_retries(
         CommandID.SET_ZIP_LED, [led_id, _colour_id_mapper(colour)], CommandType.TX
     )
 
 
-def set_led_brightness(led_brightness):
+def set_led_brightness(led_brightness: int) -> None:
+    """Set global LED brightness as percentage.
+
+    Args:
+        led_brightness: Brightness percentage expected in range 1..100.
+    """
     mapped = int((led_brightness * 128) / 100)
     _comms_retries(CommandID.SET_ZIP_LED_BRIGHTNESS, [mapped], CommandType.TX)
 
 
-def set_indicator_lights(indicator_status):
+def set_indicator_lights(indicator_status: int) -> None:
+    """Set indicator light state.
+
+    Args:
+        indicator_status: One of:
+            - IndicatorStatus.OFF
+            - IndicatorStatus.LEFT
+            - IndicatorStatus.RIGHT
+            - IndicatorStatus.HAZARDS
+    """
     _comms_retries(CommandID.INDICATOR_LIGHT, [indicator_status], CommandType.TX)
 
 
-def set_brake_lights(brake_status):
+def set_brake_lights(brake_status: int) -> None:
+    """Set brake light state.
+
+    Args:
+        brake_status: One of:
+            - BrakeStatus.OFF
+            - BrakeStatus.ON
+    """
     _comms_retries(CommandID.BREAK_LIGHT, [brake_status], CommandType.TX)
 
 
-def sound_buzzer():
+def sound_buzzer() -> None:
+    """Play Mai-Z horn beep pattern."""
     _comms_retries(CommandID.SOUND_HORN, [], CommandType.TX)
 
 
-def line_follow_status(line_follow_sensor):
+def line_follow_status(line_follow_sensor: int) -> bool:
+    """Return selected line-follow sensor state.
+
+    Args:
+        line_follow_sensor: One of:
+            - LineFollowSensor.RIGHT
+            - LineFollowSensor.CENTRE
+            - LineFollowSensor.LEFT
+
+    Returns:
+        True if selected sensor detects the line; otherwise False.
+    """
     _comms_retries(CommandID.LINE_FOLLOWING_DETECT, [], CommandType.RX)
     sensor_state = _line_follow_value & line_follow_sensor
     return bool(sensor_state)
 
 
-def cliff_detection_status():
+def cliff_detection_status() -> bool:
+    """Return filtered cliff detection state.
+
+    Returns:
+        True when a cliff is currently detected (with simple false-read filtering).
+    """
     global _false_cliff_counter
     global _current_cliff_status
 
@@ -528,27 +647,47 @@ def cliff_detection_status():
     return _current_cliff_status
 
 
-def auto_cliff_detection(auto_cliff_status):
+def auto_cliff_detection(auto_cliff_status: int) -> None:
+    """Enable or disable onboard auto-cliff stop behavior.
+
+    Args:
+        auto_cliff_status: One of:
+            - AutoCliffStatus.ENABLED
+            - AutoCliffStatus.DISABLED
+    """
     global _auto_cliff_enabled
 
     _comms_retries(CommandID.AUTO_CLIFF_DETECT, [auto_cliff_status], CommandType.TX)
     _auto_cliff_enabled = auto_cliff_status == AutoCliffStatus.ENABLED
 
 
-def measure_front_distance():
+def measure_front_distance() -> int:
+    """Measure front distance in selected units.
+
+    Returns:
+        Distance as integer centimetres or inches depending on `units_select`.
+    """
     _comms_retries(CommandID.MEASURE_DISTANCE_FRONT, [], CommandType.RX)
     if _inches_flag:
         return int(_front_distance_value / INCHES_CONSTANT)
     return int(_front_distance_value)
 
 
-def units_select(select_units):
+def units_select(select_units: int) -> None:
+    """Select distance units for movement and distance reads.
+
+    Args:
+        select_units: One of:
+            - SelectUnits.CENTIMETRES
+            - SelectUnits.INCHES
+    """
     global _inches_flag
 
     _inches_flag = bool(select_units)
 
 
-def software_version():
+def software_version() -> int:
+    """Return Mai-Z backend firmware version number."""
     _comms_retries(CommandID.SOFTWARE_VERSION, [], CommandType.RX)
     return _software_version
 
