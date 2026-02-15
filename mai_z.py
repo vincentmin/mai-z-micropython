@@ -211,6 +211,17 @@ def _calculate_check_byte(message: list) -> int:
     return (~check_byte) & 0xFF
 
 
+def _is_enodev(err: OSError) -> bool:
+    return bool(getattr(err, "args", None)) and err.args[0] == 19
+
+
+def is_connected() -> bool:
+    try:
+        return I2C_ADDRESS in mb.i2c.scan()
+    except OSError:
+        return False
+
+
 def _tx_message(command_id: int, params: list) -> None:
     """Send one protocol message to Mai-Z over I2C"""
     message_len = len(params) + 2
@@ -287,12 +298,19 @@ def _comms_retries(
 
     retries = 0
     while retries <= MAX_RETRIES:
-        if comms_type == CommandType.TX:
-            _tx_message(command_id, command_params)
-        else:
-            _rx_message(command_id)
+        try:
+            if comms_type == CommandType.TX:
+                _tx_message(command_id, command_params)
+            else:
+                _rx_message(command_id)
 
-        _rx_message(CommandID.ERROR_READ)
+            _rx_message(CommandID.ERROR_READ)
+        except OSError as err:
+            if _is_enodev(err):
+                retries += 1
+                mb.sleep(20)
+                continue
+            raise
 
         if _error_status == ErrorCode.NO_ERROR:
             return
@@ -318,9 +336,25 @@ def _comms_retries(
 # -----------------------------------------------------------------------------
 
 
-def init() -> None:
-    """Initialise Mai-Z communication by sending START_KEY. Call this once before using movement, LEDs, or sensor reads"""
-    _tx_message(CommandID.START_KEY, [])
+def init() -> bool:
+    """Initialise Mai-Z communication.
+
+    Returns True when Mai-Z is detected and START_KEY is sent, otherwise False.
+    """
+    return init_with_retries()
+
+
+def init_with_retries(retries: int = 8, delay_ms: int = 120) -> bool:
+    for _ in range(retries):
+        if is_connected():
+            try:
+                _tx_message(CommandID.START_KEY, [])
+                return True
+            except OSError as err:
+                if not _is_enodev(err):
+                    raise
+        mb.sleep(delay_ms)
+    return False
 
 
 def move(move_direction: MoveDirection, speed: int, distance: MoveDistance) -> None:

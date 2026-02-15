@@ -103,7 +103,12 @@ def run_selected_pattern(index: int) -> None:
 
 
 def setup() -> None:
-    mai_z.init()
+    while not mai_z.init_with_retries(retries=3, delay_ms=150):
+        mb.display.show(mb.Image.NO)
+        mb.sleep(250)
+
+    mb.display.show(mb.Image.YES)
+    mb.sleep(150)
     mai_z.units_select(mai_z.SelectUnits.CENTIMETRES)
     mai_z.set_led_brightness(35)
     mai_z.auto_cliff_detection(mai_z.AutoCliffStatus.ENABLED)
