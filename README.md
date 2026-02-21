@@ -1,26 +1,15 @@
-# MAI-z Shape Drawer (interactive clap mode)
+# MAI-z micropython lib
 
-This project makes a Kitronik MAI-z robot draw pen shapes with a Sharpie in the center.
+This project contains a micropython library to interact with the MAI-z robot. It is based on the official [MakeCode library](https://github.com/KitronikLtd/pxt-kitronik-mai-z/blob/master/Mai-Z.ts) and is designed to be used with the [MAI-z robot](https://www.kitronik.co.uk/5650-kitronik-mai-z-robot). There is no official micropython library for the MAI-z robot, so I hope this project will be useful for anyone who wants to use the MAI-z robot with micropython.
 
-## Controls
+## Usage
 
-- Clap once: switch to next pattern, then draw it.
-- Press button B: preview/select next pattern without drawing.
-- If your board has no microphone support in firmware, button A is used as clap fallback.
+Copy the `mai_z.py` file to your micropython device and import it in your code:
 
-Patterns cycle in this order:
+```python
+import mai_z
 
-1. Square
-2. Triangle
-3. Circle
-4. Spiral
+mai_z.move(mai_z.MoveDirection.FORWARDS, speed=50, distance=mai_z.MoveDistance.CONTINUOUS)
+```
 
-## Calibration
-
-Open [main.py](main.py) and tune:
-
-- Motor pins: `LEFT_FORWARD_PIN`, `LEFT_REVERSE_PIN`, `RIGHT_FORWARD_PIN`, `RIGHT_REVERSE_PIN`
-- Turn accuracy: `TURN_SCALE`
-- Clap sensitivity: `CLAP_THRESHOLD`
-
-Tip: if the robot drives backward or spins the wrong way, swap forward/reverse pins for that motor side.
+See `main.py` for a full example of how to use the library.
