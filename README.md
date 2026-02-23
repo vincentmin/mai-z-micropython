@@ -4,7 +4,7 @@ This project contains a micropython library to interact with the MAI-z robot. It
 
 ## Usage
 
-Copy the `mai_z.py` file to your micropython device and import it in your code:
+Copy the `mai_z.py` file into the root of your project and import it in your code:
 
 ```python
 import mai_z
